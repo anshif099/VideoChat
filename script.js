@@ -105,3 +105,26 @@ async function getMediaAndStart() {
         status.innerText = 'Could not access camera/mic.';
     }
 }
+document.getElementById('startBtn').onclick = () => {
+  if (socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: 'find' }));
+    status.innerText = 'Looking for a stranger...';
+  } else {
+    status.innerText = 'Socket not connected.';
+  }
+};
+
+document.getElementById('endBtn').onclick = () => {
+  if (peer) peer.close();
+  remoteVideo.srcObject = null;
+  status.innerText = 'Chat ended.';
+  socket.send(JSON.stringify({ type: 'disconnect' }));
+};
+
+document.getElementById('newBtn').onclick = () => {
+  if (peer) peer.close();
+  remoteVideo.srcObject = null;
+  status.innerText = 'Finding a new stranger...';
+  socket.send(JSON.stringify({ type: 'find' }));
+};
+
