@@ -1,4 +1,4 @@
-const socket = new WebSocket('wss://videochat-ikzr.onrender.com'); // your backend server
+const socket = new WebSocket('wss://videochat-ikzr.onrender.com'); // Your WebSocket server
 let peer = null;
 let localStream = null;
 let remoteStream = null;
@@ -14,14 +14,17 @@ socket.onopen = () => {
 
 socket.onmessage = async (event) => {
     const data = JSON.parse(event.data);
+    console.log('Received:', data);
 
     if (data.type === 'match') {
         initiator = data.initiator;
         console.log('Matched! Initiator:', initiator);
-        startConnection();
+        setupPeer();           // Setup peer first
+        getMediaAndStart();    // Then get media and proceed
     }
 
     if (data.type === 'offer') {
+        if (!peer) setupPeer();
         await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
         const answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
@@ -29,14 +32,17 @@ socket.onmessage = async (event) => {
     }
 
     if (data.type === 'answer') {
+        if (!peer) setupPeer();
         await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
     }
 
     if (data.type === 'candidate') {
-        try {
-            await peer.addIceCandidate(new RTCIceCandidate(data.candidate));
-        } catch (err) {
-            console.error('Error adding received ice candidate', err);
+        if (peer) {
+            try {
+                await peer.addIceCandidate(new RTCIceCandidate(data.candidate));
+            } catch (err) {
+                console.error('Error adding received ICE candidate', err);
+            }
         }
     }
 
@@ -47,23 +53,12 @@ socket.onmessage = async (event) => {
     }
 };
 
-async function startConnection() {
-    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    localVideo.srcObject = localStream;
-
-    peer = new RTCPeerConnection();
-
-    localStream.getTracks().forEach(track => {
-        peer.addTrack(track, localStream);
+function setupPeer() {
+    peer = new RTCPeerConnection({
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' } // Public STUN server
+        ]
     });
-
-    peer.ontrack = (event) => {
-        if (!remoteStream) {
-            remoteStream = new MediaStream();
-            remoteVideo.srcObject = remoteStream;
-        }
-        remoteStream.addTrack(event.track);
-    };
 
     peer.onicecandidate = (event) => {
         if (event.candidate) {
@@ -71,11 +66,42 @@ async function startConnection() {
         }
     };
 
-    if (initiator) {
-        const offer = await peer.createOffer();
-        await peer.setLocalDescription(offer);
-        socket.send(JSON.stringify({ type: 'offer', offer }));
-    }
+    peer.ontrack = (event) => {
+        console.log('Received remote track');
+        if (!remoteStream) {
+            remoteStream = new MediaStream();
+            remoteVideo.srcObject = remoteStream;
+        }
+        remoteStream.addTrack(event.track);
+    };
 
-    status.innerText = 'Connected to stranger.';
+    peer.onconnectionstatechange = () => {
+        console.log('Connection state:', peer.connectionState);
+        if (peer.connectionState === 'connected') {
+            status.innerText = 'Connected successfully!';
+        }
+    };
+}
+
+async function getMediaAndStart() {
+    try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        localVideo.srcObject = localStream;
+
+        localStream.getTracks().forEach(track => {
+            peer.addTrack(track, localStream);
+        });
+
+        if (initiator) {
+            const offer = await peer.createOffer();
+            await peer.setLocalDescription(offer);
+            socket.send(JSON.stringify({ type: 'offer', offer }));
+        }
+
+        status.innerText = 'Waiting for connection...';
+
+    } catch (err) {
+        console.error('Error accessing media devices.', err);
+        status.innerText = 'Could not access camera/mic.';
+    }
 }
