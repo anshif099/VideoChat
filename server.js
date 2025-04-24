@@ -1,52 +1,40 @@
-const express = require('express');
-const http = require('http');
 const WebSocket = require('ws');
-const path = require('path');
+const wss = new WebSocket.Server({ port: 8080 });
 
-const app = express();
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
-
-let waiting = null;
+let waitingClient = null;
 
 wss.on('connection', (ws) => {
-    console.log('A user connected');
-
-    if (waiting === null) {
-        waiting = ws;
-        ws.partner = null;
+    console.log('New client connected');
+    
+    // Wait for the first client to connect
+    if (waitingClient) {
+        // Match both clients
+        ws.send(JSON.stringify({ type: 'match', initiator: false }));
+        waitingClient.send(JSON.stringify({ type: 'match', initiator: true }));
+        waitingClient = null;
     } else {
-        // Match users
-        ws.partner = waiting;
-        waiting.partner = ws;
-
-        ws.send(JSON.stringify({ type: 'match', initiator: true }));
-        waiting.send(JSON.stringify({ type: 'match', initiator: false }));
-
-        waiting = null;
+        waitingClient = ws;
+        ws.send(JSON.stringify({ type: 'waiting' }));
     }
 
-    ws.on('message', (msg) => {
-        if (ws.partner && ws.partner.readyState === WebSocket.OPEN) {
-            ws.partner.send(msg);
+    // Relay messages between clients
+    ws.on('message', (message) => {
+        const data = JSON.parse(message);
+
+        if (data.type === 'offer' || data.type === 'answer' || data.type === 'candidate') {
+            waitingClient.send(message);
+        }
+
+        if (data.type === 'disconnect') {
+            if (waitingClient) waitingClient.send(JSON.stringify({ type: 'disconnect' }));
         }
     });
 
+    // Handle client disconnections
     ws.on('close', () => {
-        if (ws.partner && ws.partner.readyState === WebSocket.OPEN) {
-            ws.partner.send(JSON.stringify({ type: 'disconnect' }));
-            ws.partner.partner = null;
-        }
-
-        if (waiting === ws) {
-            waiting = null;
-        }
+        console.log('Client disconnected');
+        if (waitingClient === ws) waitingClient = null;
     });
 });
 
-// Serve static files (for deployment)
-app.use(express.static(path.join(__dirname, 'public')));
-
-server.listen(process.env.PORT || 8080, () => {
-    console.log('Server running on port 8080');
-});
+console.log('WebSocket server is running on ws://localhost:8080');
