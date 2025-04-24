@@ -1,38 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Video Chat with Stranger</title>
-  <style>
-    video {
-      width: 45%;
-      margin: 10px;
-      border-radius: 10px;
-      background: black;
-    }
-    #status {
-      font-size: 18px;
-      margin-bottom: 10px;
-    }
-    button {
-      margin: 5px;
-      padding: 10px 20px;
-      font-size: 16px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Chat</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div id="status">Connecting...</div>
-  <div>
-    <video id="localVideo" autoplay playsinline muted></video>
-    <video id="remoteVideo" autoplay playsinline></video>
-  </div>
-  <div>
-    <button id="startBtn">Start Chat</button>
-    <button id="endBtn">End Chat</button>
-    <button id="newBtn">New Stranger</button>
-  </div>
+    <div class="container">
+        <h1>Video Chat</h1>
+        <div id="status">Waiting for connection...</div>
+        
+        <div class="video-container">
+            <video id="localVideo" autoplay muted></video>
+            <video id="remoteVideo" autoplay></video>
+        </div>
 
-  <script src="script.js"></script>
+        <button id="startBtn">Start Chat</button>
+        <button id="disconnectBtn" style="display: none;">Disconnect</button>
+    </div>
+
+    <script src="script.js"></script>
 </body>
 </html>
