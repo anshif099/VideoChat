@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Omegle Clone</title>
+  <style>
+    body {
+      text-align: center;
+      font-family: Arial;
+      background: #111;
+      color: #fff;
+    }
+    video {
+      width: 45%;
+      margin: 10px;
+      border-radius: 10px;
+      border: 3px solid #fff;
+    }
+    #chat {
+      margin-top: 20px;
+      max-width: 600px;
+      margin-inline: auto;
+      background: #222;
+      padding: 15px;
+      border-radius: 10px;
+    }
+    #messages {
+      height: 150px;
+      overflow-y: auto;
+      border: 1px solid #fff;
+      padding: 10px;
+      margin-bottom: 10px;
+      text-align: left;
+    }
+    input[type="text"] {
+      width: 70%;
+      padding: 10px;
+      border-radius: 5px;
+      border: none;
+    }
+    button {
+      padding: 10px;
+      font-size: 14px;
+      background: #28a745;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Video Chat + Text</h1>
+  <video id="localVideo" autoplay muted></video>
+  <video id="remoteVideo" autoplay></video>
+  <br>
+  <button id="startBtn">Start Chat</button>
+  <button id="muteBtn">Mute</button>
+
+  <div id="chat">
+    <div id="messages"></div>
+    <input type="text" id="messageInput" placeholder="Type a message...">
+    <button onclick="sendMessage()">Send</button>
+  </div>
+  <div style="margin-top: 10px;">
+    <button onclick="sendSticker('🔥')">🔥</button>
+    <button onclick="sendSticker('😂')">😂</button>
+    <button onclick="sendSticker('🎉')">🎉</button>
+  </div>
+  
+  <script src="script.js"></script>
+</body>
+</html>
