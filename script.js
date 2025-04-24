@@ -17,7 +17,7 @@ socket.onopen = () => {
 socket.onmessage = async (event) => {
     const data = JSON.parse(event.data);
 
-    console.log('Received message:', data); // Log incoming messages
+    console.log('Received message:', data);
 
     if (data.type === 'match') {
         initiator = data.initiator;
