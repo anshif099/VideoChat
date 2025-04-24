@@ -10,7 +10,7 @@ let peerConnection;
 let isMuted = false;
 
 const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-const socket = new WebSocket('ws://localhost:8080');
+const socket = new WebSocket("wss://videochat-ikzr.onrender.com");
 
 startBtn.onclick = async () => {
   localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
