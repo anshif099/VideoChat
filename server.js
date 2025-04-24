@@ -7,47 +7,46 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-const waitingUsers = [];
-const pairs = new Map();
+let waiting = null;
 
 wss.on('connection', (ws) => {
-  console.log('New user connected');
+    console.log('A user connected');
 
-  // Match with another user
-  if (waitingUsers.length > 0) {
-    const partner = waitingUsers.pop();
-    pairs.set(ws, partner);
-    pairs.set(partner, ws);
+    if (waiting === null) {
+        waiting = ws;
+        ws.partner = null;
+    } else {
+        // Match users
+        ws.partner = waiting;
+        waiting.partner = ws;
 
-    ws.send(JSON.stringify({ type: 'matched' }));
-    partner.send(JSON.stringify({ type: 'matched' }));
-  } else {
-    waitingUsers.push(ws);
-  }
+        ws.send(JSON.stringify({ type: 'match', initiator: true }));
+        waiting.send(JSON.stringify({ type: 'match', initiator: false }));
 
-  ws.on('message', (message) => {
-    const partner = pairs.get(ws);
-    if (partner && partner.readyState === WebSocket.OPEN) {
-      partner.send(message);
-    }
-  });
-
-  ws.on('close', () => {
-    const partner = pairs.get(ws);
-    if (partner && partner.readyState === WebSocket.OPEN) {
-      partner.send(JSON.stringify({ type: 'leave' }));
-      pairs.delete(partner);
+        waiting = null;
     }
 
-    pairs.delete(ws);
-    const index = waitingUsers.indexOf(ws);
-    if (index !== -1) waitingUsers.splice(index, 1);
-  });
+    ws.on('message', (msg) => {
+        if (ws.partner && ws.partner.readyState === WebSocket.OPEN) {
+            ws.partner.send(msg);
+        }
+    });
+
+    ws.on('close', () => {
+        if (ws.partner && ws.partner.readyState === WebSocket.OPEN) {
+            ws.partner.send(JSON.stringify({ type: 'disconnect' }));
+            ws.partner.partner = null;
+        }
+
+        if (waiting === ws) {
+            waiting = null;
+        }
+    });
 });
 
-// Serve static files
+// Serve static files (for deployment)
 app.use(express.static(path.join(__dirname, 'public')));
 
-server.listen(8080, () => {
-  console.log('Server running on http://localhost:8080');
+server.listen(process.env.PORT || 8080, () => {
+    console.log('Server running on port 8080');
 });
