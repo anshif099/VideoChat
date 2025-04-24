@@ -1,4 +1,4 @@
-const socket = new WebSocket('wss://videochat-ikzr.onrender.com'); // Your WebSocket server
+const socket = new WebSocket('wss://your-websocket-server-url'); // Replace with your WebSocket URL
 let peer = null;
 let localStream = null;
 let remoteStream = null;
@@ -7,6 +7,8 @@ let initiator = false;
 const localVideo = document.getElementById('localVideo');
 const remoteVideo = document.getElementById('remoteVideo');
 const status = document.getElementById('status');
+const startBtn = document.getElementById('startBtn');
+const disconnectBtn = document.getElementById('disconnectBtn');
 
 socket.onopen = () => {
     console.log('Connected to WebSocket server');
@@ -14,17 +16,17 @@ socket.onopen = () => {
 
 socket.onmessage = async (event) => {
     const data = JSON.parse(event.data);
-    console.log('Received:', data);
+
+    console.log('Received message:', data); // Log incoming messages
 
     if (data.type === 'match') {
         initiator = data.initiator;
         console.log('Matched! Initiator:', initiator);
-        setupPeer();           // Setup peer first
-        getMediaAndStart();    // Then get media and proceed
+        startConnection();
     }
 
     if (data.type === 'offer') {
-        if (!peer) setupPeer();
+        console.log("Received offer from opponent");
         await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
         const answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
@@ -32,17 +34,15 @@ socket.onmessage = async (event) => {
     }
 
     if (data.type === 'answer') {
-        if (!peer) setupPeer();
+        console.log("Received answer from opponent");
         await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
     }
 
     if (data.type === 'candidate') {
-        if (peer) {
-            try {
-                await peer.addIceCandidate(new RTCIceCandidate(data.candidate));
-            } catch (err) {
-                console.error('Error adding received ICE candidate', err);
-            }
+        try {
+            await peer.addIceCandidate(new RTCIceCandidate(data.candidate));
+        } catch (err) {
+            console.error('Error adding received ice candidate', err);
         }
     }
 
@@ -53,21 +53,17 @@ socket.onmessage = async (event) => {
     }
 };
 
-function setupPeer() {
-    peer = new RTCPeerConnection({
-        iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' } // Public STUN server
-        ]
+async function startConnection() {
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localVideo.srcObject = localStream;
+
+    peer = new RTCPeerConnection();
+
+    localStream.getTracks().forEach(track => {
+        peer.addTrack(track, localStream);
     });
 
-    peer.onicecandidate = (event) => {
-        if (event.candidate) {
-            socket.send(JSON.stringify({ type: 'candidate', candidate: event.candidate }));
-        }
-    };
-
     peer.ontrack = (event) => {
-        console.log('Received remote track');
         if (!remoteStream) {
             remoteStream = new MediaStream();
             remoteVideo.srcObject = remoteStream;
@@ -75,56 +71,33 @@ function setupPeer() {
         remoteStream.addTrack(event.track);
     };
 
-    peer.onconnectionstatechange = () => {
-        console.log('Connection state:', peer.connectionState);
-        if (peer.connectionState === 'connected') {
-            status.innerText = 'Connected successfully!';
+    peer.onicecandidate = (event) => {
+        if (event.candidate) {
+            socket.send(JSON.stringify({ type: 'candidate', candidate: event.candidate }));
         }
     };
-}
 
-async function getMediaAndStart() {
-    try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        localVideo.srcObject = localStream;
-
-        localStream.getTracks().forEach(track => {
-            peer.addTrack(track, localStream);
-        });
-
-        if (initiator) {
-            const offer = await peer.createOffer();
-            await peer.setLocalDescription(offer);
-            socket.send(JSON.stringify({ type: 'offer', offer }));
-        }
-
-        status.innerText = 'Waiting for connection...';
-
-    } catch (err) {
-        console.error('Error accessing media devices.', err);
-        status.innerText = 'Could not access camera/mic.';
+    if (initiator) {
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+        socket.send(JSON.stringify({ type: 'offer', offer }));
     }
+
+    status.innerText = 'Connected to stranger.';
+    startBtn.style.display = 'none';
+    disconnectBtn.style.display = 'inline-block';
 }
-document.getElementById('startBtn').onclick = () => {
-  if (socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({ type: 'find' }));
-    status.innerText = 'Looking for a stranger...';
-  } else {
-    status.innerText = 'Socket not connected.';
-  }
+
+startBtn.onclick = () => {
+    socket.send(JSON.stringify({ type: 'start' }));
+    status.innerText = 'Waiting for stranger...';
 };
 
-document.getElementById('endBtn').onclick = () => {
-  if (peer) peer.close();
-  remoteVideo.srcObject = null;
-  status.innerText = 'Chat ended.';
-  socket.send(JSON.stringify({ type: 'disconnect' }));
+disconnectBtn.onclick = () => {
+    socket.send(JSON.stringify({ type: 'disconnect' }));
+    status.innerText = 'Disconnected. Waiting for new connection...';
+    localVideo.srcObject = null;
+    remoteVideo.srcObject = null;
+    startBtn.style.display = 'inline-block';
+    disconnectBtn.style.display = 'none';
 };
-
-document.getElementById('newBtn').onclick = () => {
-  if (peer) peer.close();
-  remoteVideo.srcObject = null;
-  status.innerText = 'Finding a new stranger...';
-  socket.send(JSON.stringify({ type: 'find' }));
-};
-
