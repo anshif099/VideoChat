@@ -1,45 +1,68 @@
+const express = require('express');
+const http = require('http');
 const WebSocket = require('ws');
-const wss = new WebSocket.Server({ port: 8080 });
+const path = require('path');
 
-let waitingClient = null;
+const app = express();
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
+
+const waitingUsers = [];
+const pairs = new Map();
 
 wss.on('connection', (ws) => {
-    console.log('New client connected');
-    
-    // When a client connects, try to match them with another one
-    if (waitingClient) {
-        // If a second client joins, we match both of them
-        ws.send(JSON.stringify({ type: 'match', initiator: false }));
-        waitingClient.send(JSON.stringify({ type: 'match', initiator: true }));
-        waitingClient = null;
+  console.log('New user connected');
+
+  // Match with a waiting user
+  if (waitingUsers.length > 0) {
+    const partner = waitingUsers.pop();
+
+    if (partner.readyState === WebSocket.OPEN) {
+      pairs.set(ws, partner);
+      pairs.set(partner, ws);
+
+      ws.send(JSON.stringify({ type: 'matched' }));
+      partner.send(JSON.stringify({ type: 'matched' }));
+
+      console.log('Users matched');
     } else {
-        waitingClient = ws;
-        ws.send(JSON.stringify({ type: 'waiting' }));
+      waitingUsers.push(ws); // retry match if partner was closed
+    }
+  } else {
+    waitingUsers.push(ws);
+    ws.send(JSON.stringify({ type: 'waiting' }));
+  }
+
+  ws.on('message', (message) => {
+    const partner = pairs.get(ws);
+    if (partner && partner.readyState === WebSocket.OPEN) {
+      partner.send(message);
+    }
+  });
+
+  ws.on('close', () => {
+    const partner = pairs.get(ws);
+
+    if (partner && partner.readyState === WebSocket.OPEN) {
+      partner.send(JSON.stringify({ type: 'leave' }));
+      pairs.delete(partner);
     }
 
-    // Listen for messages from the client
-    ws.on('message', (message) => {
-        const data = JSON.parse(message);
-        if (data.type === 'offer' || data.type === 'answer' || data.type === 'candidate') {
-            // Forward the signaling messages (offer, answer, candidate) to the other client
-            if (waitingClient) {
-                waitingClient.send(message);
-            }
-        }
+    pairs.delete(ws);
 
-        if (data.type === 'disconnect') {
-            // Notify the other client if one disconnects
-            if (waitingClient) {
-                waitingClient.send(JSON.stringify({ type: 'disconnect' }));
-            }
-        }
-    });
+    // Remove from waiting list if present
+    const index = waitingUsers.indexOf(ws);
+    if (index !== -1) waitingUsers.splice(index, 1);
 
-    // Handle when a client disconnects
-    ws.on('close', () => {
-        console.log('Client disconnected');
-        if (waitingClient === ws) waitingClient = null;
-    });
+    console.log('User disconnected');
+  });
 });
 
-console.log('WebSocket server is running on ws://localhost:8080');
+// Serve static files from /public folder (optional)
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Use Render-assigned port or default 8080
+const PORT = process.env.PORT || 8080;
+server.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
