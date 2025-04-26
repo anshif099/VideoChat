@@ -11,9 +11,33 @@ const waitingUsers = [];
 const pairs = new Map();
 
 wss.on('connection', (ws) => {
-  console.log('New user connected');
+  console.log('New user connected'); // Log when a user connects
 
-  // Match with a waiting user
+  ws.on('message', (message) => {
+    console.log('Received message:', message); // Log received messages
+    const partner = pairs.get(ws);
+    if (partner && partner.readyState === WebSocket.OPEN) {
+      partner.send(message);
+    }
+  });
+
+  ws.on('close', () => {
+    console.log('User disconnected'); // Log when a user disconnects
+
+    const partner = pairs.get(ws);
+    if (partner && partner.readyState === WebSocket.OPEN) {
+      partner.send(JSON.stringify({ type: 'leave' }));
+      pairs.delete(partner);
+    }
+
+    pairs.delete(ws);
+
+    const index = waitingUsers.indexOf(ws);
+    if (index !== -1) waitingUsers.splice(index, 1);
+
+    console.log('User disconnected');
+  });
+
   if (waitingUsers.length > 0) {
     const partner = waitingUsers.pop();
 
@@ -26,43 +50,23 @@ wss.on('connection', (ws) => {
 
       console.log('Users matched');
     } else {
-      waitingUsers.push(ws); // retry match if partner was closed
+      waitingUsers.push(ws);
     }
   } else {
     waitingUsers.push(ws);
     ws.send(JSON.stringify({ type: 'waiting' }));
   }
-
-  ws.on('message', (message) => {
-    const partner = pairs.get(ws);
-    if (partner && partner.readyState === WebSocket.OPEN) {
-      partner.send(message);
-    }
-  });
-
-  ws.on('close', () => {
-    const partner = pairs.get(ws);
-
-    if (partner && partner.readyState === WebSocket.OPEN) {
-      partner.send(JSON.stringify({ type: 'leave' }));
-      pairs.delete(partner);
-    }
-
-    pairs.delete(ws);
-
-    // Remove from waiting list if present
-    const index = waitingUsers.indexOf(ws);
-    if (index !== -1) waitingUsers.splice(index, 1);
-
-    console.log('User disconnected');
-  });
 });
 
-// Serve static files from /public folder (optional)
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve everything from the root
+app.use(express.static(__dirname));
 
-// Use Render-assigned port or default 8080
-const PORT = process.env.PORT || 8080;
+// Serve index.html for the root path
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
